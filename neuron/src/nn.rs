@@ -175,11 +175,17 @@ impl std::ops::Mul<Neuron> for Neuron {
         let result = self.borrow().data * other.borrow().data;
 
         let prop_fn: PropagateGradientBackwardsFn = |value| {
-            let mut first = value.parents[0].borrow_mut();
-            let mut second = value.parents[1].borrow_mut();
+            if *value.parents[1].borrow() == *value.parents[0].borrow() {
+                // The both the parent nodes are the same.
+                let mut first = value.parents[0].borrow_mut();
+                first.gradient += 2.0 * first.data;
+            } else {
+                let mut first = value.parents[0].borrow_mut();
+                let mut second = value.parents[1].borrow_mut();
 
-            first.gradient += second.data * value.gradient;
-            second.gradient += first.data * value.gradient;
+                first.gradient += second.data * value.gradient;
+                second.gradient += first.data * value.gradient;
+            }
         };
 
         Neuron::with_neuron_internal(NeuronInternal::new(
@@ -260,9 +266,17 @@ mod tests {
     }
 
     #[test]
-    fn use_node_multiple() {
+    fn add_node_parents_same() {
         let a: Neuron = Neuron::new(3.0, "a");
-        let mut b: Neuron = a.clone() + a;
+        let b: Neuron = a.clone() + a;
+        let b = b.with_label("b");
+        b.back_prop_gradient();
+    }
+
+    #[test]
+    fn mul_node_parents_same() {
+        let a: Neuron = Neuron::new(3.0, "a");
+        let b: Neuron = a.clone() * a;
         let b = b.with_label("b");
         b.back_prop_gradient();
     }
