@@ -206,6 +206,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "notebook")]
     fn test_visualize() {
         let a = Neuron::new(2.0, "a");
         let b = Neuron::new(-3.0, "b");
