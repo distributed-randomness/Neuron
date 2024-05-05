@@ -160,7 +160,7 @@ impl<'a> std::ops::Mul for Neuron<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{type_of, Neuron};
+    use super::Neuron;
 
     #[test]
     fn test_add() {
@@ -196,14 +196,5 @@ mod tests {
             bp(&a_mul_b);
         }
         println!("{a_mul_b:?}");
-    }
-
-    #[test]
-    fn test_expr() {
-        nn!(a, 2.0);
-        nn!(b, -3.0);
-        // nn!(c, a * b);
-
-        // nn!(d, c + 10.0);
     }
 }
