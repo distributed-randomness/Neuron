@@ -9,4 +9,7 @@ edition = "2021"
 derive_more = "0"
 graphviz-rust = "0"
 petgraph = "0"
-petgraph-evcxr = "0"
+petgraph-evcxr = {version = "0", optional = true}
+
+[features]
+notebook = ["dep:petgraph-evcxr"]

@@ -1,10 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use petgraph::Graph;
-use petgraph_evcxr::draw_graph;
+#[cfg(feature = "notebook")]
+use std::collections::HashMap;
 
 type ValTy = f32;
-
 type _Neuron<'a> = Rc<RefCell<Neuron<'a>>>;
 type BackProp = fn(&Neuron) -> ();
 
@@ -25,30 +24,6 @@ pub struct Neuron<'a> {
 
     backprop: Option<BackProp>,
 }
-
-// pub fn type_of<T>(_: T) -> &'static str {
-//     std::any::type_name::<T>()
-// }
-
-// #[macro_export]
-// macro_rules! nn {
-//     ($var_name:ident, $v:expr) => {
-//         println!("Type of {} is {}", $v, type_of($v));
-
-//         let ty = type_of($v);
-
-//         if ty == "f64" || ty == "f32" {
-//             println!("{} is a neuron", stringify!($var_name));
-
-//             let $var_name = Neuron::new($v, stringify!($var_name));
-//         } else {
-//             // This is a neuron.
-//             println!("{} is a neuron", stringify!($var_name));
-//             let $var_name = $v;
-//             $var_name.name = stringify!($var_name);
-//         }
-//     };
-// }
 
 impl<'a> Neuron<'a> {
     pub fn new(val: ValTy, name: &'a str) -> Self {
@@ -78,6 +53,7 @@ impl<'a> Neuron<'a> {
     }
 
     // Returns a map of node name to string representation of the node.
+    #[cfg(feature = "notebook")]
     fn get_node_repr(&self) -> HashMap<String, String> {
         fn recur(map: &mut HashMap<String, String>, node: &Neuron) {
             if let Some((p1, p2)) = &node.parents {
@@ -94,7 +70,12 @@ impl<'a> Neuron<'a> {
         map
     }
 
+    /// Visualize the graph so generated.
+    #[cfg(feature = "notebook")]
     pub fn visualize(&self) {
+        use petgraph::Graph;
+        use petgraph_evcxr::draw_graph;
+
         let mut g: Graph<&str, &str, petgraph::Directed> = Graph::new();
 
         let map = self.get_node_repr();
@@ -119,6 +100,24 @@ impl<'a> Neuron<'a> {
             }
         }
         draw_graph(&g);
+    }
+
+    pub fn back_propagate(&mut self) {
+        self.grad = 1.0;
+
+        let mut visited = Vec::with_capacity(10);
+
+        let node = self;
+        visited.push(node.clone());
+        while let Some(node) = visited.pop() {
+            if let Some(back_prop_fn) = node.backprop {
+                back_prop_fn(&node);
+            }
+            if let Some((p1, p2)) = &node.parents {
+                visited.push(p1.borrow().clone());
+                visited.push(p2.borrow().clone());
+            }
+        }
     }
 }
 

@@ -10,3 +10,5 @@ same.
 the rust compiler happy at times.
 
 The focus is on understanding and not on efficiency. 
+
+![](example-viz.png)
