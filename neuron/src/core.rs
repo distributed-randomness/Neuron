@@ -8,18 +8,8 @@ type ValTy = f32;
 type _Neuron<'a> = Rc<RefCell<Neuron<'a>>>;
 type BackProp = fn(&Neuron) -> ();
 
-#[derive(derive_more::Display, PartialEq, Eq, Debug, Clone)]
-pub enum Ops {
-    #[display(fmt = "+")]
-    Add,
-    #[display(fmt = "*")]
-    Mul,
-
-    None,
-}
-
 #[derive(derive_more::Display, PartialEq, Debug, Clone)]
-#[display(fmt = "{name} |v:{val}, g: {grad}")]
+#[display(fmt = "{name}({parent_ops}| v:{val}, g: {grad})")]
 pub struct Neuron<'a> {
     val: ValTy,
     pub name: &'a str,
@@ -31,7 +21,7 @@ pub struct Neuron<'a> {
     parents: Option<(_Neuron<'a>, _Neuron<'a>)>,
 
     /// What operation was done on the parents that generated this node.
-    parent_ops: Ops,
+    parent_ops: &'a str,
 
     backprop: Option<BackProp>,
 }
@@ -67,14 +57,14 @@ impl<'a> Neuron<'a> {
             name,
             grad: 0.0,
             parents: None,
-            parent_ops: Ops::None,
+            parent_ops: "",
             backprop: None,
         }
     }
 
     pub fn with_parents_ops(
         val: ValTy,
-        parent_ops: Ops,
+        parent_ops: &'a str,
         parents: (_Neuron<'a>, _Neuron<'a>),
     ) -> Self {
         Self {
@@ -121,8 +111,6 @@ impl<'a> Neuron<'a> {
                 let i1 = g.add_node(map.get(p1.borrow().name).unwrap().as_str());
                 let i2 = g.add_node(&map.get(p2.borrow().name).unwrap().as_str());
 
-                // let op_idx = g.add_node(node.parent_ops.as_ref());
-
                 visited.push((p1.borrow().clone(), i1));
                 visited.push((p2.borrow().clone(), i2));
 
@@ -140,7 +128,7 @@ impl<'a> std::ops::Add for Neuron<'a> {
     fn add(self, rhs: Self) -> Self::Output {
         let mut node = Neuron::with_parents_ops(
             self.val + rhs.val,
-            Ops::Add,
+            "+",
             (Rc::new(RefCell::new(self)), Rc::new(RefCell::new(rhs))),
         );
 
@@ -162,7 +150,7 @@ impl<'a> std::ops::Mul for Neuron<'a> {
     fn mul(self, rhs: Self) -> Self::Output {
         let mut node = Neuron::with_parents_ops(
             self.val * rhs.val,
-            Ops::Mul,
+            "*",
             (Rc::new(RefCell::new(self)), Rc::new(RefCell::new(rhs))),
         );
 
@@ -216,5 +204,25 @@ mod tests {
             bp(&a_mul_b);
         }
         println!("{a_mul_b:?}");
+    }
+
+    #[test]
+    fn test_visualize() {
+        let a = Neuron::new(2.0, "a");
+        let b = Neuron::new(-3.0, "b");
+        let c = Neuron::new(10.0, "c");
+
+        let mut e = a * b;
+        e.name = "e";
+
+        let mut d = e + c;
+        d.name = "d";
+
+        let f = Neuron::new(-2.0, "f");
+
+        let mut l = d * f;
+        l.name = "L";
+
+        l.visualize();
     }
 }
