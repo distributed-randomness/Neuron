@@ -16,9 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: goto project directory
-      run: cd neuron
     - name: Build
+      working-directory: ./neuron
       run: cargo build --verbose
     - name: Run tests
+      working-directory: ./neuron
       run: cargo test --verbose
