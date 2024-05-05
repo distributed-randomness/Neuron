@@ -1,6 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use petgraph::Graph;
+use petgraph_evcxr::draw_graph;
 
 type ValTy = f32;
 
@@ -18,7 +19,7 @@ pub enum Ops {
 }
 
 #[derive(derive_more::Display, PartialEq, Debug, Clone)]
-#[display(fmt = "val: {val}, grad: {grad}")]
+#[display(fmt = "{name} |v:{val}, g: {grad}")]
 pub struct Neuron<'a> {
     val: ValTy,
     pub name: &'a str,
@@ -86,31 +87,50 @@ impl<'a> Neuron<'a> {
         }
     }
 
-    pub fn visualize(&self) -> Graph<&str, &str> {
-        let mut tree: Graph<&str, &str, petgraph::Directed> = Graph::new();
-        let node = self;
+    // Returns a map of node name to string representation of the node.
+    fn get_node_repr(&self) -> HashMap<String, String> {
+        fn recur(map: &mut HashMap<String, String>, node: &Neuron) {
+            if let Some((p1, p2)) = &node.parents {
+                map.insert(p1.borrow().name.to_string(), p1.borrow().to_string());
+                map.insert(p2.borrow().name.to_string(), p2.borrow().to_string());
 
+                recur(map, &*p1.borrow());
+                recur(map, &*p2.borrow());
+            }
+        }
+        let mut map = HashMap::new();
+        map.insert(self.name.to_string(), self.to_string());
+        recur(&mut map, self);
+        map
+    }
+
+    pub fn visualize(&self) {
+        let mut g: Graph<&str, &str, petgraph::Directed> = Graph::new();
+
+        let map = self.get_node_repr();
+
+        let node = self;
         let mut visited = Vec::with_capacity(10);
-        let i = tree.add_node(node.name);
+
+        let i = g.add_node(map.get(node.name).unwrap());
 
         visited.push((node.clone(), i));
 
         while let Some((node, idx)) = visited.pop() {
-            println!("{}", node.name);
-
             if let Some((p1, p2)) = &node.parents {
-                let i1 = tree.add_node(&p1.borrow().name);
+                let i1 = g.add_node(map.get(p1.borrow().name).unwrap().as_str());
+                let i2 = g.add_node(&map.get(p2.borrow().name).unwrap().as_str());
+
+                // let op_idx = g.add_node(node.parent_ops.as_ref());
 
                 visited.push((p1.borrow().clone(), i1));
-
-                let i2 = tree.add_node(&p2.borrow().name);
                 visited.push((p2.borrow().clone(), i2));
 
-                tree.add_edge(i1, idx, "");
-                tree.add_edge(i2, idx, "");
+                g.add_edge(i1, idx, "");
+                g.add_edge(i2, idx, "");
             }
         }
-        tree
+        draw_graph(&g);
     }
 }
 
