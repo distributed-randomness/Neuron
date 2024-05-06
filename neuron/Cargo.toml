@@ -10,6 +10,7 @@ derive_more = "0"
 graphviz-rust = "0"
 petgraph = "0"
 petgraph-evcxr = {version = "0", optional = true}
+rand = "0"
 
 [features]
 notebook = ["dep:petgraph-evcxr"]

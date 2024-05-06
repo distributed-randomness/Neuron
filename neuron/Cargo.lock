@@ -221,6 +221,7 @@ dependencies = [
  "graphviz-rust",
  "petgraph",
  "petgraph-evcxr",
+ "rand",
 ]
 
 [[package]]

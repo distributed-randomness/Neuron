@@ -10,23 +10,23 @@ use std::{
 };
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Neuron(Rc<RefCell<NeuronInternal>>);
+pub struct Val(Rc<RefCell<ValInternal>>);
 
-type PropagateGradientBackwardsFn = fn(value: &Ref<NeuronInternal>);
+type PropagateGradientBackwardsFn = fn(value: &Ref<ValInternal>);
 
 #[derive(Clone, Debug)]
-pub struct NeuronInternal {
+pub struct ValInternal {
     data: f64,
     gradient: f64,
     label: Option<String>,
     operation: Option<String>,
-    parents: Vec<Neuron>,
+    parents: Vec<Val>,
     propagate: Option<PropagateGradientBackwardsFn>,
 }
 
-impl Neuron {
+impl Val {
     pub fn new(data: f64, label: &str) -> Self {
-        Self::with_neuron_internal(NeuronInternal {
+        Self::with_neuron_internal(ValInternal {
             data,
             gradient: 0.0,
             label: Some(label.to_string()),
@@ -36,11 +36,11 @@ impl Neuron {
         })
     }
 
-    fn with_neuron_internal(value: NeuronInternal) -> Neuron {
-        Neuron(Rc::new(RefCell::new(value)))
+    fn with_neuron_internal(value: ValInternal) -> Val {
+        Val(Rc::new(RefCell::new(value)))
     }
 
-    pub fn with_label(self, label: &str) -> Neuron {
+    pub fn with_label(self, label: &str) -> Val {
         self.borrow_mut().label = Some(label.to_string());
         self
     }
@@ -55,9 +55,9 @@ impl Neuron {
 
     pub fn back_prop_gradient(&self) {
         self.borrow_mut().gradient = 1.0;
-        let mut visited: HashSet<Neuron> = HashSet::new();
+        let mut visited: HashSet<Val> = HashSet::new();
 
-        fn back_prop_internal(node: &Neuron, visited: &mut HashSet<Neuron>) {
+        fn back_prop_internal(node: &Val, visited: &mut HashSet<Val>) {
             if !visited.contains(node) {
                 visited.insert(node.clone());
                 let borrowed = node.borrow();
@@ -74,6 +74,53 @@ impl Neuron {
         back_prop_internal(self, &mut visited);
     }
 
+    pub fn pow(&self, other: &Val) -> Val {
+        let result = self.borrow().data.powf(other.borrow().data);
+
+        let prop_fn: PropagateGradientBackwardsFn = |value| {
+            let mut base = value.parents[0].borrow_mut();
+            let power = value.parents[1].borrow();
+
+            // d(x^(n))/dx = n . x^ (n-1)
+            base.gradient += power.data * (base.data.powf(power.data - 1.0)) * value.gradient;
+        };
+
+        Val::with_neuron_internal(ValInternal::new(
+            result,
+            None,
+            Some("^".to_string()),
+            vec![self.clone(), other.clone()],
+            Some(prop_fn),
+        ))
+    }
+
+    pub fn relu(&self) -> Val {
+        // If the value is positive, leave it as it is, if it is negative, reset it to zero.
+        let result = if self.borrow().data < 0.0 {
+            0.0
+        } else {
+            self.borrow().data
+        };
+
+        let prop_fn: PropagateGradientBackwardsFn = |value| {
+            let mut first = value.parents[0].borrow_mut();
+
+            first.gradient += if first.data > 0.0 {
+                value.gradient
+            } else {
+                0.0
+            };
+        };
+
+        Val::with_neuron_internal(ValInternal::new(
+            result,
+            None,
+            Some("ReLU".to_string()),
+            vec![self.clone()],
+            Some(prop_fn),
+        ))
+    }
+
     #[cfg(feature = "notebook")]
     pub fn visualize(&self) {
         use petgraph::{graph::NodeIndex, Graph};
@@ -83,7 +130,7 @@ impl Neuron {
 
         let mut g: GraphTy = Graph::new();
 
-        fn traverse(node: &Neuron, node_idx: NodeIndex, g: &mut GraphTy) {
+        fn traverse(node: &Val, node_idx: NodeIndex, g: &mut GraphTy) {
             for parent in &node.borrow().parents {
                 let parent_idx = g.add_node(parent.to_string());
 
@@ -100,15 +147,15 @@ impl Neuron {
     }
 }
 
-impl NeuronInternal {
+impl ValInternal {
     fn new(
         data: f64,
         label: Option<String>,
         op: Option<String>,
-        prev: Vec<Neuron>,
+        prev: Vec<Val>,
         propagate: Option<PropagateGradientBackwardsFn>,
-    ) -> NeuronInternal {
-        NeuronInternal {
+    ) -> ValInternal {
+        ValInternal {
             data,
             gradient: 0.0,
             label,
@@ -119,7 +166,7 @@ impl NeuronInternal {
     }
 }
 
-impl PartialEq for NeuronInternal {
+impl PartialEq for ValInternal {
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data
             && self.gradient == other.gradient
@@ -128,20 +175,20 @@ impl PartialEq for NeuronInternal {
             && self.parents == other.parents
     }
 }
-impl Eq for NeuronInternal {}
+impl Eq for ValInternal {}
 
-impl Deref for Neuron {
-    type Target = Rc<RefCell<NeuronInternal>>;
+impl Deref for Val {
+    type Target = Rc<RefCell<ValInternal>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::ops::Add<Neuron> for Neuron {
-    type Output = Neuron;
+impl std::ops::Add<Val> for Val {
+    type Output = Val;
 
-    fn add(self, other: Neuron) -> Self::Output {
+    fn add(self, other: Val) -> Self::Output {
         let result = self.borrow().data + other.borrow().data;
 
         let prop_fn: PropagateGradientBackwardsFn = |value| {
@@ -158,7 +205,7 @@ impl std::ops::Add<Neuron> for Neuron {
             }
         };
 
-        Neuron::with_neuron_internal(NeuronInternal::new(
+        Val::with_neuron_internal(ValInternal::new(
             result,
             None,
             Some("+".to_string()),
@@ -168,10 +215,56 @@ impl std::ops::Add<Neuron> for Neuron {
     }
 }
 
-impl std::ops::Mul<Neuron> for Neuron {
-    type Output = Neuron;
+impl std::ops::Neg for Val {
+    type Output = Val;
 
-    fn mul(self, other: Neuron) -> Self::Output {
+    fn neg(self) -> Self::Output {
+        Val::from(-1.0) * self
+    }
+}
+
+impl From<f64> for Val {
+    fn from(t: f64) -> Val {
+        Val::with_neuron_internal(ValInternal::new(t, None, None, Vec::new(), None))
+    }
+}
+
+impl std::ops::Mul<Val> for Val {
+    type Output = Val;
+
+    fn mul(self, other: Val) -> Self::Output {
+        &self * other
+
+        // let result = self.borrow().data * other.borrow().data;
+
+        // let prop_fn: PropagateGradientBackwardsFn = |value| {
+        //     if *value.parents[1].borrow() == *value.parents[0].borrow() {
+        //         // The both the parent nodes are the same.
+        //         let mut first = value.parents[0].borrow_mut();
+        //         first.gradient += 2.0 * first.data;
+        //     } else {
+        //         let mut first = value.parents[0].borrow_mut();
+        //         let mut second = value.parents[1].borrow_mut();
+
+        //         first.gradient += second.data * value.gradient;
+        //         second.gradient += first.data * value.gradient;
+        //     }
+        // };
+
+        // Val::with_neuron_internal(ValInternal::new(
+        //     result,
+        //     None,
+        //     Some("*".to_string()),
+        //     vec![self.clone(), other.clone()],
+        //     Some(prop_fn),
+        // ))
+    }
+}
+
+impl std::ops::Mul<Val> for &Val {
+    type Output = Val;
+
+    fn mul(self, other: Val) -> Self::Output {
         let result = self.borrow().data * other.borrow().data;
 
         let prop_fn: PropagateGradientBackwardsFn = |value| {
@@ -188,7 +281,7 @@ impl std::ops::Mul<Neuron> for Neuron {
             }
         };
 
-        Neuron::with_neuron_internal(NeuronInternal::new(
+        Val::with_neuron_internal(ValInternal::new(
             result,
             None,
             Some("*".to_string()),
@@ -198,7 +291,7 @@ impl std::ops::Mul<Neuron> for Neuron {
     }
 }
 
-impl Display for NeuronInternal {
+impl Display for ValInternal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let label = if let Some(label) = &self.label {
             label
@@ -215,7 +308,7 @@ impl Display for NeuronInternal {
     }
 }
 
-impl Hash for NeuronInternal {
+impl Hash for ValInternal {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.data.to_bits().hash(state);
         self.gradient.to_bits().hash(state);
@@ -225,13 +318,13 @@ impl Hash for NeuronInternal {
     }
 }
 
-impl Hash for Neuron {
+impl Hash for Val {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.borrow().hash(state);
     }
 }
 
-impl Display for Neuron {
+impl Display for Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.borrow())
     }
@@ -239,13 +332,14 @@ impl Display for Neuron {
 
 #[cfg(test)]
 mod tests {
-    use super::Neuron;
+    use super::Val;
 
     #[test]
+    #[cfg(feature = "notebook")]
     fn test_nn() {
-        let a = Neuron::new(2.0, "a");
-        let b = Neuron::new(-3.0, "b");
-        let c = Neuron::new(10.0, "c");
+        let a = Val::new(2.0, "a");
+        let b = Val::new(-3.0, "b");
+        let c = Val::new(10.0, "c");
 
         let e = a * b;
         let e = e.with_label("e");
@@ -253,7 +347,7 @@ mod tests {
         let d = e + c;
         let d = d.with_label("d");
 
-        let f = Neuron::new(-2.0, "f");
+        let f = Val::new(-2.0, "f");
 
         let l = d * f;
         let l = l.with_label("L");
@@ -267,16 +361,16 @@ mod tests {
 
     #[test]
     fn add_node_parents_same() {
-        let a: Neuron = Neuron::new(3.0, "a");
-        let b: Neuron = a.clone() + a;
+        let a: Val = Val::new(3.0, "a");
+        let b: Val = a.clone() + a;
         let b = b.with_label("b");
         b.back_prop_gradient();
     }
 
     #[test]
     fn mul_node_parents_same() {
-        let a: Neuron = Neuron::new(3.0, "a");
-        let b: Neuron = a.clone() * a;
+        let a: Val = Val::new(3.0, "a");
+        let b: Val = a.clone() * a;
         let b = b.with_label("b");
         b.back_prop_gradient();
     }
